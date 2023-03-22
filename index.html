@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>My first three.js app</title>
+		<style>
+			body { margin: 0; }
+		</style>
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "./node_modules/three/build/three.module.js",
+					"three/examples/jsm/controls/OrbitControls":"./node_modules/three/examples/jsm/controls/OrbitControls.js"
+				}
+			}
+		</script>
+	</head>
+	<body>
+		<script type="module">
+			import * as THREE from 'three';
+			import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+
+			const scene = new THREE.Scene();
+			const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
+
+			const renderer = new THREE.WebGLRenderer();
+			renderer.setSize( window.innerWidth, window.innerHeight );
+			document.body.appendChild( renderer.domElement );
+
+			const envMap = new THREE.TextureLoader().load('textures/environment.jpg');
+			//const envMap = new THREE.TextureLoader().load('textures/earth.jpg');
+			envMap.mapping = THREE.EquirectangularReflectionMapping;
+			envMap.flipY = true;
+
+			const geometry = new THREE.SphereGeometry( 0.6, 30, 30);
+			const material = new THREE.ShaderMaterial( { 
+				vertexShader: `
+				uniform vec3 u_camera;
+				
+				varying vec2 vUv;
+				varying vec3 vNormal;
+				varying vec3 viewDir;
+				
+				out vec3 pos;
+				out mat4 mat;
+
+				void main(){
+
+					mat4 mvp = projectionMatrix * modelViewMatrix;
+					gl_Position = mvp * vec4(position, 1.0);
+					
+					//vNormal = normalize((modelViewMatrix * vec4(normal, 0.0)).xyz );
+					vNormal = normalize(normal);
+					mat4 mat = modelViewMatrix; 
+					vec3 pos = vec3(modelViewMatrix * vec4(position, 1.0)) + vNormal; 
+
+					//vec3 pos = position;
+					//vec3 viewDir = normalize(vec3(modelViewMatrix * vec4(position, 1.0)));
+					//viewDir = pos - u_camera;
+
+					//vec3 r = reflect(-viewDir, vNormal);
+
+					//vUv.x = (3.1415926538 + atan(-r.z, -r.x)) / (2. * 3.1415926538);
+					//vUv.y = atan(sqrt(r.x*r.x + r.z*r.z), r.y) / (3.1415926538);
+		
+				}	
+				`,
+				fragmentShader: `
+				uniform sampler2D u_texture;
+				uniform vec3 u_camera;
+
+				varying vec2 vUv;
+
+				varying vec3 vNormal;
+				varying vec3 viewDir;
+				
+				in vec3 pos;
+				in mat4 mat;
+
+				void main(){
+
+					vec2 uv;
+
+					vec3 viewDir = pos + vNormal - u_camera;
+					vec3 r = reflect(-viewDir, vNormal);
+					
+					uv.x = (3.1415926538 + atan(-r.z, -r.x)) / (2. * 3.1415926538);
+					uv.y = atan(sqrt(r.x*r.x + r.z*r.z), r.y) / (3.1415926538);
+					
+					gl_FragColor = vec4(texture2D(u_texture, uv).rgb, 1.);
+					//gl_FragColor = vec4(texture2D(u_texture, vUv).rgb, 1.);
+				}
+				`,
+				uniforms: {u_texture: {value: envMap},
+						   u_camera: {value: camera.position}}
+			} );
+			const sphere = new THREE.Mesh( geometry, material );
+			scene.add( sphere );
+
+			
+			scene.background = envMap;
+
+			camera.position.z = 5;
+
+			let controls = new OrbitControls(camera, renderer.domElement);
+			controls.rotateSpeed = 1.0;
+			controls.zoomSpeed = 1.2;
+			//controls.enableZoom = true;
+			controls.keys = {LEFT: "KeyA", UP:"KeyW", RIGHT: "KeyD", BOTTOM:"KeyS"};
+			controls.minDistance = 0.1;
+			controls.maxDistance = 9;
+
+			function animate() {
+				requestAnimationFrame( animate );
+
+				renderer.render( scene, camera );
+			}
+
+			animate();
+		</script>
+		
+	</body>
+</html>
